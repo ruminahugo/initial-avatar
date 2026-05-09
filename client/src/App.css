@@ -1,0 +1,256 @@
+:root {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --bg-dark: #0f172a;
+  --bg-card: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #10b981;
+  --danger: #ef4444;
+  --border: #334155;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.loading-screen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--bg-dark);
+}
+
+/* Common Components */
+button {
+  cursor: pointer;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.5rem;
+  border: none;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-main);
+}
+
+.btn-outline:hover {
+  background: var(--border);
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: white;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+input:focus, select:focus {
+  outline: 2px solid var(--primary);
+  border-color: transparent;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Dashboard & List Layouts */
+.container {
+  padding: 2rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-rows: 100vh;
+  gap: 1.5rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+/* Responsive Table/List */
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.4rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+
+.list-item:hover {
+  background: #334155;
+  color: white;
+}
+
+.list-item.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.thumb-small {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  background: #000;
+}
+
+/* Designer UI */
+.advanced-designer input,
+.advanced-designer textarea,
+.advanced-designer select {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: white;
+  padding: 0.6rem;
+  border-radius: 0.4rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.tool-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 0.4rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.tool-btn:hover {
+  background: #334155;
+  color: white;
+}
+
+.asset-thumb {
+  transition: all 0.2s;
+  cursor: grab;
+}
+
+.asset-thumb:hover {
+  border-color: var(--primary) !important;
+  transform: translateY(-2px);
+}
+
+.tool-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 0.4rem;
+  cursor: grab;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.tool-card:hover {
+  border-color: var(--primary);
+  background: #1e293b;
+}
+
+.sidebar-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.prop-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.15rem;
+  display: block;
+}
+
+.prop-section {
+  background: #0f172a;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #334155;
+}
