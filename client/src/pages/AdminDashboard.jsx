@@ -31,6 +31,8 @@ function AdminDashboard() {
     data.set('config', JSON.stringify(config));
     if (files.background) data.append('background', files.background);
     if (files.overlay) data.append('overlay', files.overlay);
+    // ✅ Send canvas snapshot as thumbnail
+    if (files.thumbnail) data.append('thumbnail', files.thumbnail, 'thumbnail.jpg');
     try {
       if (editingTemplate) await axios.put(`/api/templates/${editingTemplate.id}`, data);
       else await axios.post('/api/templates', data);
@@ -79,8 +81,8 @@ function AdminDashboard() {
               <div key={t.id} className="card" style={{ padding:'1rem' }}>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <div className="thumb-small" style={{ position:'relative', overflow:'hidden', background:'#000', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    {t.background_path ? (
-                      <img src={t.background_path} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="thumb" />
+                    {(t.thumbnail_path || t.background_path) ? (
+                      <img src={t.thumbnail_path || t.background_path} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="thumb" />
                     ) : <span style={{ fontSize:'0.6rem', color:'#475569' }}>No Image</span>}
                   </div>
                   <div style={{ flex: 1 }}>
@@ -104,17 +106,30 @@ function AdminDashboard() {
           <h2>User Projects ({projects.length})</h2>
           <div className="grid">
             {projects.map(p => (
-              <div key={p.id} className="card" style={{ padding:'1rem', cursor:'pointer' }} onClick={() => setSelectedProject(p)}>
+              <div key={p.id} className="card" style={{ padding:'1rem', cursor:'pointer' }} onClick={async () => {
+                setSelectedProject(p); // show immediately
+                try { // refresh with latest server data (export_path may have changed)
+                  const res = await axios.get(`/api/projects/${p.id}`);
+                  setSelectedProject(res.data);
+                } catch (_) {}
+              }}>
                 <div style={{ display: 'flex', gap: '1rem' }}>
-                  <div className="thumb-small" style={{ position:'relative', overflow:'hidden', background:'#000', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <div className="thumb-small" style={{ position:'relative', overflow:'hidden', background:'#000', display:'flex', alignItems:'center', justifyContent:'center', flexShrink: 0 }}>
                     {p.thumbnail_path ? (
                       <img src={p.thumbnail_path} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="thumb" />
                     ) : <span style={{ fontSize:'0.6rem', color:'#475569' }}>No Image</span>}
+                    {/* HD badge */}
+                    {p.export_path && (
+                      <span style={{ position:'absolute', bottom:2, right:2, background:'#10b981', color:'white', fontSize:'0.55rem', fontWeight:700, padding:'1px 4px', borderRadius:'0.2rem', lineHeight:1.4 }}>HD</span>
+                    )}
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ fontSize: '1rem', marginBottom:'0.25rem' }}>Project #{p.id}</h3>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Template: {p.template_id}</p>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(p.last_saved_at).toLocaleString()}</p>
+                    <p style={{ fontSize: '0.7rem', marginTop:'0.3rem', color: p.export_path ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+                      {p.export_path ? '✓ HD Ready' : '⏳ Preview only'}
+                    </p>
                   </div>
                   <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
                     <button className="tool-btn" style={{ color: 'var(--danger)' }} onClick={(e) => handleDeleteProject(p.id, e)}><Trash2 size={16} /></button>
@@ -151,8 +166,23 @@ function AdminDashboard() {
                         <Download size={18} /> Download HD Image
                       </button>
                     </a>
-                  ) : <p style={{ color:'var(--danger)', fontSize:'0.9rem' }}>Project not exported as HD yet.</p>}
-                  <a href={`/project/${selectedProject.id}`} target="_blank" rel="noreferrer"><button className="btn-outline" style={{ width:'100%' }}>Open in User Editor</button></a>
+                  ) : selectedProject.thumbnail_path ? (
+                    <>
+                      <a href={selectedProject.thumbnail_path} download={`project-${selectedProject.id}-preview.jpg`} style={{ width:'100%' }}>
+                        <button className="btn-outline" style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'0.5rem' }}>
+                          <Download size={18} /> Download Preview (low-res)
+                        </button>
+                      </a>
+                      <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', textAlign:'center' }}>
+                        User cần mở editor và bấm <strong>Save</strong> lại để tạo bản HD.
+                      </p>
+                    </>
+                  ) : (
+                    <p style={{ color:'var(--text-muted)', fontSize:'0.9rem' }}>Chưa có ảnh nào.</p>
+                  )}
+                  <a href={`/project/${selectedProject.id}`} target="_blank" rel="noreferrer">
+                    <button className="btn-outline" style={{ width:'100%' }}>Open in User Editor</button>
+                  </a>
                 </div>
               </div>
             </div>

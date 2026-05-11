@@ -37,12 +37,12 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login onLogin={() => setIsAdmin(true)} />} />
-          <Route 
-            path="/admin" 
-            element={isAdmin ? <AdminDashboard /> : <Navigate to="/login" />} 
+          <Route
+            path="/admin"
+            element={isAdmin ? <AdminDashboard /> : <Navigate to="/login" />}
           />
           <Route path="/edit/:templateId" element={<UserEditor />} />
-          <Route path="/project/:projectId" element={<UserEditor />} />
+          <Route path="/project/:projectId" element={isAdmin ? <UserEditor /> : <Navigate to="/login" />} />
         </Routes>
       </div>
     </Router>

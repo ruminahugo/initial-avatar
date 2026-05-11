@@ -123,7 +123,6 @@ input:focus, select:focus {
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  grid-template-rows: 100vh;
   gap: 1.5rem;
 }
 

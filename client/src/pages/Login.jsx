@@ -53,6 +53,7 @@ function Login({ onLogin }) {
           <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
             Sign In
           </button>
+          <a href="/"><button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }}>Back to Home</button></a>
         </form>
       </div>
     </div>
