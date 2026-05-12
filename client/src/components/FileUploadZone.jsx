@@ -63,7 +63,7 @@ function FileUploadZone({ onFilesSelected, accept = "image/*", multiple = false,
         <Upload size={32} color={isDragging ? 'var(--primary)' : 'var(--text-muted)'} style={{ marginBottom: '1rem' }} />
         <p style={{ fontWeight: '600' }}>{label}</p>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-          PNG, JPG or WEBP (Max 10MB)
+          PNG, JPG or WEBP (Tối đa 10MB)
         </p>
       </div>
     </div>

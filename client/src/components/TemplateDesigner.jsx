@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Stage, Layer, Image as KonvaImage, Rect, Circle, RegularPolygon, Star as KonvaStar, Transformer, Text as KonvaText, Group } from 'react-konva';
 import useImage from 'use-image';
 import axios from 'axios';
-import { Type, Square, Trash2, Circle as CircleIcon, Triangle, Star, Save, Maximize, ZoomIn, ZoomOut, ArrowUp, ArrowDown, Tag } from 'lucide-react';
+import { Type, Square, Trash2, Circle as CircleIcon, Triangle, Star, Save, Maximize, ZoomIn, ZoomOut, ArrowUp, ArrowDown, Tag, Lock, Unlock } from 'lucide-react';
 import FileUploadZone from './FileUploadZone';
 
 const FONTS  = ['Inter', 'Roboto', 'Montserrat', 'Playfair Display', 'Lora', 'Open Sans', 'Oswald', 'Raleway'];
@@ -29,7 +29,16 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
   const [scale, setScale] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [lockRatio, setLockRatio] = useState(true);
+
+  // ── Undo / Redo history ──────────────────────────────────
+  const historyRef    = useRef([]);
+  const historyIdx    = useRef(-1);
+  const skipPushRef   = useRef(false);       // set true during undo/redo to skip re-push
+  const debounceRef   = useRef(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const panStart = useRef({ x: 0, y: 0 });
   const stageRef = useRef();
   const trRef = useRef();
@@ -45,6 +54,46 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
 
   useEffect(() => { fitToScreen(); }, [fitToScreen]);
 
+  // ── Push history on every layers/viewport change (debounced 400ms) ──
+  useEffect(() => {
+    if (skipPushRef.current) { skipPushRef.current = false; return; }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const snapshot = { layers: JSON.parse(JSON.stringify(layers)), viewport: { ...viewport } };
+      historyRef.current = historyRef.current.slice(0, historyIdx.current + 1);
+      historyRef.current.push(snapshot);
+      if (historyRef.current.length > 60) historyRef.current.shift();
+      historyIdx.current = historyRef.current.length - 1;
+      setCanUndo(historyIdx.current > 0);
+      setCanRedo(false);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [layers, viewport]); // eslint-disable-line
+
+  const undo = useCallback(() => {
+    if (historyIdx.current <= 0) return;
+    historyIdx.current--;
+    const snap = historyRef.current[historyIdx.current];
+    skipPushRef.current = true;
+    setLayers(JSON.parse(JSON.stringify(snap.layers)));
+    setViewport({ ...snap.viewport });
+    setSelectedId(null);
+    setCanUndo(historyIdx.current > 0);
+    setCanRedo(true);
+  }, []);
+
+  const redo = useCallback(() => {
+    if (historyIdx.current >= historyRef.current.length - 1) return;
+    historyIdx.current++;
+    const snap = historyRef.current[historyIdx.current];
+    skipPushRef.current = true;
+    setLayers(JSON.parse(JSON.stringify(snap.layers)));
+    setViewport({ ...snap.viewport });
+    setSelectedId(null);
+    setCanUndo(true);
+    setCanRedo(historyIdx.current < historyRef.current.length - 1);
+  }, []);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -55,6 +104,42 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
+
+  // ── Keyboard shortcuts ───────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = document.activeElement?.tagName;
+      const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag);
+
+      // Undo / Redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); return; }
+
+      if (isTyping) return; // don't move layers when typing
+
+      // Arrow key movement
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) {
+        e.preventDefault();
+        const d = e.shiftKey ? 10 : 1;
+        const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0;
+        const dy = e.key === 'ArrowUp'   ? -d : e.key === 'ArrowDown'  ? d : 0;
+        if (selectedId === 'viewport') {
+          setViewport(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
+        } else if (selectedId) {
+          setLayers(prev => prev.map(l => l.id === selectedId ? { ...l, x: l.x + dx, y: l.y + dy } : l));
+        }
+        return;
+      }
+
+      // Delete selected layer
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && selectedId !== 'viewport') {
+        setLayers(p => p.filter(l => l.id !== selectedId));
+        setSelectedId(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId, undo, redo]);
 
   const handleMiddlePanStart = (e) => {
     if (e.button === 1 || e.altKey) {
@@ -81,14 +166,17 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
     const data = e.dataTransfer.getData('data') ? JSON.parse(e.dataTransfer.getData('data')) : null;
 
     if (type === 'text' || type === 'label') {
+      const isLabel = type === 'label';
       const nl = {
         id: 'text-' + Date.now(), type: 'text',
-        text: type === 'label' ? 'Label Name' : 'Text',
+        subtype: isLabel ? 'label' : 'text',
+        text: isLabel ? 'Label Name' : 'Text',
         placeholder: 'Enter text...', x: Math.round(pos.x), y: Math.round(pos.y),
-        fontSize: type === 'label' ? 24 : 30,
-        fill: type === 'label' ? '#fbbf24' : '#ffffff',
+        fontSize: isLabel ? 24 : 30,
+        fill: isLabel ? '#fbbf24' : '#ffffff',
         fontFamily: 'Inter', fontStyle: 'bold', rotation: 0,
-        label: type === 'label' ? 'Label' : 'Text Field', isEditable: true,
+        label: isLabel ? 'Label' : 'Text Field',
+        isEditable: !isLabel,   // labels are static — users cannot edit them
       };
       setLayers(prev => [...prev, nl]);
       setSelectedId(nl.id);
@@ -206,14 +294,14 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
       {/* ── Left sidebar ── */}
       <div style={{ background: '#1e293b', borderRight: '1px solid #334155', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
         <section>
-          <h4 className="sidebar-title">Template Name</h4>
+          <h4 className="sidebar-title">Tên mẫu</h4>
           <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Frame Name..." />
         </section>
 
         {/* Assets — drag to canvas */}
         <section>
-          <h4 className="sidebar-title">Assets (Drag to Canvas)</h4>
-          <FileUploadZone multiple={true} label="Upload Images" onFilesSelected={handleLibraryUpload} />
+          <h4 className="sidebar-title">Thư viện (Kéo sang Canvas)</h4>
+          <FileUploadZone multiple={true} label="Tải ảnh lên" onFilesSelected={handleLibraryUpload} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.75rem' }}>
             {library.map(img => (
               <div key={img.id} draggable onDragStart={e => handleDragStart(e, 'library-image', img)}
@@ -227,7 +315,7 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
 
         {/* Tools */}
         <section>
-          <h4 className="sidebar-title">Tools (Drag to Canvas)</h4>
+          <h4 className="sidebar-title">Công cụ (Kéo sang Canvas)</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <div draggable onDragStart={e => handleDragStart(e, 'text')} className="tool-card"><Type size={16} color="#fbbf24" /> Text Layer</div>
             <div draggable onDragStart={e => handleDragStart(e, 'label')} className="tool-card"><Tag size={16} color="#facc15" /> Tool Label</div>
@@ -260,6 +348,9 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
 
         {/* Toolbar */}
         <div style={{ position: 'absolute', top: '1rem', background: '#1e293b', padding: '0.4rem 0.8rem', borderRadius: '2rem', display: 'flex', gap: '0.4rem', zIndex: 10, border: '1px solid #334155' }}>
+          <button className="tool-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" style={{ opacity: canUndo ? 1 : 0.35 }}>↩</button>
+          <button className="tool-btn" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)" style={{ opacity: canRedo ? 1 : 0.35 }}>↪</button>
+          <div style={{ width: 1, background: '#334155' }} />
           <button className="tool-btn" onClick={() => setScale(s => Math.max(0.1, s - 0.1))}><ZoomOut size={16} /></button>
           <div style={{ minWidth: 42, textAlign: 'center', fontSize: '0.75rem', fontWeight: 600 }}>{Math.round(scale * 100)}%</div>
           <button className="tool-btn" onClick={() => setScale(s => Math.min(3, s + 0.1))}><ZoomIn size={16} /></button>
@@ -267,6 +358,15 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
           <div style={{ width: 1, background: '#334155' }} />
           <button className="tool-btn" onClick={() => moveLayer('up')}><ArrowUp size={16} /></button>
           <button className="tool-btn" onClick={() => moveLayer('down')}><ArrowDown size={16} /></button>
+          <div style={{ width: 1, background: '#334155' }} />
+          <button
+            className="tool-btn"
+            title={lockRatio ? 'Unlock ratio' : 'Lock ratio'}
+            onClick={() => setLockRatio(v => !v)}
+            style={{ color: lockRatio ? '#6366f1' : '#94a3b8' }}
+          >
+            {lockRatio ? <Lock size={16} /> : <Unlock size={16} />}
+          </button>
         </div>
 
         {/* ✅ Fixed layout: outer div has scaled dimensions */}
@@ -322,8 +422,14 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
                   <Rect x={0} y={viewport.y + viewport.h} width={canvasSize.w} height={canvasSize.h - viewport.y - viewport.h} fill="rgba(0,0,0,0.55)" />
                 </Group>
 
-                <Transformer ref={trRef} rotateEnabled keepRatio={false} borderStroke="#6366f1" anchorStroke="#6366f1" anchorFill="#fff" anchorSize={8} />
-                <Transformer ref={vpTrRef} rotateEnabled={false} keepRatio={false} borderStroke="#10b981" anchorStroke="#10b981" anchorFill="#fff" anchorSize={8} />
+                <Transformer ref={trRef} rotateEnabled keepRatio={lockRatio}
+                  enabledAnchors={lockRatio
+                    ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+                    : ['top-left', 'top-center', 'top-right', 'middle-right', 'middle-left', 'bottom-left', 'bottom-center', 'bottom-right']}
+                  borderStroke="#6366f1" anchorStroke="#6366f1" anchorFill="#fff" anchorSize={10} />
+                <Transformer ref={vpTrRef} rotateEnabled={false} keepRatio={false}
+                  enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+                  borderStroke="#10b981" anchorStroke="#10b981" anchorFill="#fff" anchorSize={8} />
               </Layer>
             </Stage>
           </div>
@@ -332,12 +438,12 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
 
       {/* ── Right sidebar: Properties ── */}
       <div style={{ background: '#1e293b', borderLeft: '1px solid #334155', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto' }}>
-        <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Properties</h3>
+        <h3 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Thuộc tính</h3>
 
         {selectedId === 'viewport' ? (
           /* ── Viewport ── */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            <PropLabel>Position & Size</PropLabel>
+            <PropLabel>Tọa độ & Kích thước</PropLabel>
             <Grid2>
               <NumInput label="X" value={viewport.x} onChange={v => setViewport(p => ({ ...p, x: v }))} />
               <NumInput label="Y" value={viewport.y} onChange={v => setViewport(p => ({ ...p, y: v }))} />
@@ -371,45 +477,47 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
                 </Grid2>
               </>)}
 
-              <NumInput label="Rotation (°)" value={layer.rotation || 0} step={1} integer={false} onChange={v => up({ rotation: v })} />
+              <NumInput label="Xoay (°)" value={layer.rotation || 0} step={1} integer={false} onChange={v => up({ rotation: v })} />
 
               {/* ══ TEXT ══ */}
               {layer.type === 'text' && (<>
                 <Divider />
                 <div>
-                  <PropLabel>Layer Label</PropLabel>
+                  <PropLabel>Tên Layer</PropLabel>
                   <input value={layer.label || ''} onChange={e => up({ label: e.target.value })} placeholder="Layer name in list..." />
                 </div>
                 <div>
-                  <PropLabel>Text Content</PropLabel>
+                  <PropLabel>Nội dung</PropLabel>
                   <input value={layer.text || ''} onChange={e => up({ text: e.target.value })} placeholder="Default text..." />
                 </div>
-                <Toggle
-                  label="User Editable"
-                  value={!!layer.isEditable}
-                  onChange={v => up({ isEditable: v })}
-                />
-                {layer.isEditable && (
+                {layer.subtype !== 'label' && (
+                  <Toggle
+                    label="Cho phép nhập"
+                    value={!!layer.isEditable}
+                    onChange={v => up({ isEditable: v })}
+                  />
+                )}
+                {layer.isEditable && layer.subtype !== 'label' && (
                   <div>
-                    <PropLabel>Placeholder</PropLabel>
-                    <input value={layer.placeholder || ''} onChange={e => up({ placeholder: e.target.value })} placeholder="Shown when empty..." />
+                    <PropLabel>Gợi ý</PropLabel>
+                    <input value={layer.placeholder || ''} onChange={e => up({ placeholder: e.target.value })} placeholder="Hiển thị khi trống..." />
                   </div>
                 )}
                 <Divider />
-                <NumInput label="Font Size (px)" value={layer.fontSize || 20} onChange={v => up({ fontSize: v })} />
+                <NumInput label="Cỡ chữ (px)" value={layer.fontSize || 20} onChange={v => up({ fontSize: v })} />
                 <div>
-                  <PropLabel>Font Family</PropLabel>
+                  <PropLabel>Font chữ</PropLabel>
                   <select value={layer.fontFamily || 'Inter'} onChange={e => up({ fontFamily: e.target.value })}>
                     {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
                 <div>
-                  <PropLabel>Font Style</PropLabel>
+                  <PropLabel>Kiểu chữ</PropLabel>
                   <select value={layer.fontStyle || 'normal'} onChange={e => up({ fontStyle: e.target.value })}>
                     {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <ColorInput label="Text Color" value={layer.fill || '#ffffff'} onChange={v => up({ fill: v })} />
+                <ColorInput label="Màu chữ" value={layer.fill || '#ffffff'} onChange={v => up({ fill: v })} />
               </>)}
 
               {/* ══ SHAPE ══ */}
@@ -437,29 +545,29 @@ function TemplateDesigner({ initialTemplate, onSave, onCancel }) {
                 style={{ color: '#ef4444', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
                 onClick={deleteLayer}
               >
-                <Trash2 size={14} /> Remove Layer
+                <Trash2 size={14} /> Xóa Layer
               </button>
             </div>
           );
         })() : (
           /* ── Nothing selected ── */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            <PropLabel>Canvas Size</PropLabel>
+            <PropLabel>Kích thước Canvas</PropLabel>
             <Grid2>
               <NumInput label="W" value={canvasSize.w} onChange={v => setCanvasSize(c => ({ ...c, w: v }))} />
               <NumInput label="H" value={canvasSize.h} onChange={v => setCanvasSize(c => ({ ...c, h: v }))} />
             </Grid2>
             <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.5rem' }}>
-              Click a layer in the canvas or the layer list to edit its properties.
+              Chọn vào layer trong canvas hoặc trong danh sách để chỉnh sửa thuộc tính.
             </p>
           </div>
         )}
 
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <button className="btn-primary" onClick={handleSaveAll} disabled={saving} style={{ padding: '0.8rem' }}>
-            <Save size={18} /> {saving ? 'Saving...' : 'Save Template'}
+            <Save size={18} /> {saving ? 'Đang lưu...' : 'Lưu Template'}
           </button>
-          <button className="btn-outline" onClick={onCancel}>Cancel</button>
+          <button className="btn-outline" onClick={onCancel}>Hủy</button>
         </div>
       </div>
     </div>

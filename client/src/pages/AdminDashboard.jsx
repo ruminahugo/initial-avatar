@@ -25,7 +25,7 @@ function AdminDashboard() {
   };
 
   const handleSaveFromDesigner = async ({ name, files, config }) => {
-    if (!name) return alert('Template name is required');
+    if (!name) return alert('Tên mẫu không được để trống');
     const data = new FormData();
     data.set('name', name);
     data.set('config', JSON.stringify(config));
@@ -63,8 +63,8 @@ function AdminDashboard() {
       <header className="header">
         <h1>Admin Dashboard</h1>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          <button className={activeTab === 'templates' ? 'btn-primary' : 'btn-outline'} onClick={() => setActiveTab('templates')}>Templates</button>
-          <button className={activeTab === 'projects' ? 'btn-primary' : 'btn-outline'} onClick={() => setActiveTab('projects')}>User Projects</button>
+          <button className={activeTab === 'templates' ? 'btn-primary' : 'btn-outline'} onClick={() => setActiveTab('templates')}>Mẫu</button>
+          <button className={activeTab === 'projects' ? 'btn-primary' : 'btn-outline'} onClick={() => setActiveTab('projects')}>Tất cả dự án</button>
         </div>
       </header>
 

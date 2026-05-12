@@ -34,7 +34,7 @@ function Login({ onLogin }) {
         <form onSubmit={handleSubmit}>
           {error && <p style={{ color: 'var(--danger)', marginBottom: '1rem', textAlign: 'center' }}>{error}</p>}
           
-          <label>Username</label>
+          <label>Tên đăng nhập</label>
           <input 
             type="text" 
             value={username} 
@@ -42,7 +42,7 @@ function Login({ onLogin }) {
             required 
           />
 
-          <label>Password</label>
+          <label>Mật khẩu</label>
           <input 
             type="password" 
             value={password} 
@@ -51,9 +51,10 @@ function Login({ onLogin }) {
           />
 
           <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-            Sign In
+            Đăng nhập
           </button>
-          <a href="/"><button className="btn-primary" style={{ width: '100%', marginTop: '1rem' }}>Back to Home</button></a>
+          <button className="btn-primary" onClick={() => navigate('/')} style={{ width: '100%', marginTop: '1rem' }}>
+            Quay lại trang chủ</button>
         </form>
       </div>
     </div>

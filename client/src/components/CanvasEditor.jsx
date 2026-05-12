@@ -6,7 +6,7 @@ import { ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 // Extra space around the viewport so Transformer handles are visible outside the clip
 export const CANVAS_OVERFLOW_PAD = 72;
 
-function CanvasEditor({ template, avatarImage, avatarState, onStateChange, stageRef, onDimensionsChange, lockRatio = true }) {
+function CanvasEditor({ template, avatarImage, avatarState, onStateChange, stageRef, onDimensionsChange, lockRatio = true, skipAutoCenter }) {
   const config = template.config
     ? (typeof template.config === 'string' ? JSON.parse(template.config) : template.config)
     : {};
@@ -57,7 +57,14 @@ function CanvasEditor({ template, avatarImage, avatarState, onStateChange, stage
     // Notify parent of natural dimensions for the properties panel
     onDimensionsChange?.({ w: userImg.width, h: userImg.height });
 
-    // Fit & center inside viewport
+    // ✅ Skip auto-center when position is already set (e.g. restored from localStorage)
+    if (skipAutoCenter?.current) {
+      skipAutoCenter.current = false; // consume the flag — only skip once
+      setAvatarSelected(true);
+      return;
+    }
+
+    // Fit & center inside viewport (only for genuinely new images)
     const scale = Math.min(viewport.w / userImg.width, viewport.h / userImg.height, 1);
     const x = (viewport.x || 0) + (viewport.w - userImg.width * scale) / 2;
     const y = (viewport.y || 0) + (viewport.h - userImg.height * scale) / 2;
@@ -67,7 +74,6 @@ function CanvasEditor({ template, avatarImage, avatarState, onStateChange, stage
       scaleX: scale,
       scaleY: scale,
       rotation: 0,
-      // Store default so Reset button can restore it
       _default: { x, y, scaleX: scale, scaleY: scale, rotation: 0 },
     });
     setAvatarSelected(true);
@@ -248,6 +254,9 @@ function CanvasEditor({ template, avatarImage, avatarState, onStateChange, stage
                   ref={trRef}
                   keepRatio={lockRatio}
                   rotateEnabled={true}
+                  enabledAnchors={lockRatio
+                    ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+                    : ['top-left', 'top-center', 'top-right', 'middle-right', 'middle-left', 'bottom-left', 'bottom-center', 'bottom-right']}
                   borderStroke="#6366f1"
                   anchorStroke="#6366f1"
                   anchorFill="#fff"

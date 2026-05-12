@@ -26,8 +26,9 @@ function UserEditor() {
   const [localProjectId, setLocalProjectId] = useState(null);
   const [restoredMsg,   setRestoredMsg]   = useState(null); // toast
 
-  const stageRef    = useRef();
-  const autoSaveRef = useRef(null);
+  const stageRef           = useRef();
+  const autoSaveRef        = useRef(null);
+  const skipAutoCenterRef  = useRef(false); // tells CanvasEditor not to override restored position
 
   // Effective project ID — URL param wins, localStorage fallback
   const effectiveProjectId = projectId || localProjectId;
@@ -55,7 +56,11 @@ function UserEditor() {
         const saved = lsGet(templateId);
         if (saved) {
           if (saved.avatarState)    setAvatarState(saved.avatarState);
-          if (saved.avatarImageUrl) setAvatarImage(saved.avatarImageUrl);
+          if (saved.avatarImageUrl) {
+            setAvatarImage(saved.avatarImageUrl);
+            // Position is already in the restored avatarState — tell CanvasEditor not to auto-center
+            skipAutoCenterRef.current = true;
+          }
           if (saved.projectId)      setLocalProjectId(saved.projectId);
           const mins = Math.round((Date.now() - (saved.updatedAt || 0)) / 60000);
           setRestoredMsg(`Đã khôi phục chỉnh sửa ${mins < 1 ? 'vừa rồi' : `${mins} phút trước`}`);
@@ -77,8 +82,7 @@ function UserEditor() {
       lsSet(templateId, {
         projectId: localProjectId,
         avatarState: cleanState,
-        // Only persist server URLs — blob:// URLs are ephemeral
-        avatarImageUrl: avatarImage && !String(avatarImage).startsWith('blob:') ? avatarImage : null,
+        avatarImageUrl: avatarImage || null,   // dataURL or server URL — always safe to store
         updatedAt: Date.now(),
       });
     }, 1500);
@@ -91,15 +95,22 @@ function UserEditor() {
     if (!file || !template) return;
     const cfg = typeof template.config === 'string' ? JSON.parse(template.config) : (template.config || {});
     const vp  = cfg.viewport || cfg.canvasSize || { w: 800, h: 800 };
-    const img = new Image();
-    img.src = URL.createObjectURL(file);
-    img.onload = () => {
-      const scale   = Math.min(vp.w / img.width, vp.h / img.height, 1);
-      const centerX = (vp.x || 0) + (vp.w - img.width  * scale) / 2;
-      const centerY = (vp.y || 0) + (vp.h - img.height * scale) / 2;
-      setAvatarImage(img.src);
-      setAvatarState(prev => ({ ...prev, file, scaleX: scale, scaleY: scale, x: centerX, y: centerY, rotation: 0 }));
+
+    // ✅ Read as dataURL (not blob://) so it can persist in localStorage
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      const img = new Image();
+      img.onload = () => {
+        const scale   = Math.min(vp.w / img.width, vp.h / img.height, 1);
+        const centerX = (vp.x || 0) + (vp.w - img.width  * scale) / 2;
+        const centerY = (vp.y || 0) + (vp.h - img.height * scale) / 2;
+        setAvatarImage(dataUrl);
+        setAvatarState(prev => ({ ...prev, file, scaleX: scale, scaleY: scale, x: centerX, y: centerY, rotation: 0 }));
+      };
+      img.src = dataUrl;
     };
+    reader.readAsDataURL(file);
   };
 
   // ── Viewport dimensions helper ───────────────────────────
@@ -159,8 +170,8 @@ function UserEditor() {
       setLocalProjectId(savedId);
 
       // Only redirect on first-ever creation
-      if (!effectiveProjectId && !isAutosave) navigate(`/project/${savedId}`, { replace: true });
-      if (!isAutosave) alert('Project saved!');
+      //if (!effectiveProjectId && !isAutosave) navigate(`/project/${savedId}`, { replace: true });
+      if (!isAutosave) alert('Đã lưu thành công vào server!');
     } catch (err) { if (!isAutosave) alert('Error saving project'); }
     finally { setSaving(false); }
   };
@@ -191,7 +202,7 @@ function UserEditor() {
     finally { setExporting(false); }
   };
 
-  if (loading || !template) return <div className="loading-screen">Loading Editor...</div>;
+  if (loading || !template) return <div className="loading-screen">Đang tải...</div>;
 
   const config        = typeof template.config === 'string' ? JSON.parse(template.config) : (template.config || {});
   const editableTexts = (config.layers || []).filter(l => l.type === 'text' && l.isEditable);
@@ -200,17 +211,17 @@ function UserEditor() {
     <div className="container fade-in" style={{ paddingBottom: '5rem' }}>
       <header className="header">
         <button className="btn-outline" onClick={() => navigate('/')} style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-          <ArrowLeft size={18} /> Back
+          <ArrowLeft size={18} /> Quay lại
         </button>
         <h2>{template.name}</h2>
         <div style={{ display:'flex', gap:'1rem' }}>
           <button className="btn-outline" onClick={() => handleSave()} disabled={saving}>
             <Save size={18} style={{ marginRight:'0.5rem' }} />
-            {saving ? 'Saving...' : (effectiveProjectId ? 'Update' : 'Save')}
+            {saving ? 'Đang lưu...' : (effectiveProjectId ? 'Cập nhật' : 'Lưu')}
           </button>
           <button className="btn-primary" onClick={handleExport} disabled={exporting}>
             <Download size={18} style={{ marginRight:'0.5rem' }} />
-            {exporting ? 'Exporting...' : 'Export HD'}
+            {exporting ? 'Đang xuất ảnh...' : 'Xuất ảnh HD'}
           </button>
         </div>
       </header>
@@ -232,13 +243,14 @@ function UserEditor() {
             stageRef={stageRef}
             onDimensionsChange={setImgDims}
             lockRatio={lockRatio}
+            skipAutoCenter={skipAutoCenterRef}
           />
 
           {/* Properties panel */}
           {avatarImage && imgDims.w > 0 && (
             <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:'1rem', padding:'1rem 1.25rem', marginTop:'1rem', width:'100%' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.75rem' }}>
-                <span style={{ fontSize:'0.85rem', fontWeight:700, color:'var(--text-muted)' }}>Image Properties</span>
+                <span style={{ fontSize:'0.85rem', fontWeight:700, color:'var(--text-muted)' }}>Thuộc tính ảnh</span>
                 <button className="btn-outline" style={{ padding:'0.3rem 0.8rem', fontSize:'0.8rem', display:'flex', alignItems:'center', gap:'0.4rem' }}
                   onClick={() => { const d = avatarState._default; if (d) setAvatarState(p => ({ ...p, ...d })); }}>
                   <RotateCcw size={14} /> Reset
@@ -246,7 +258,7 @@ function UserEditor() {
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr auto 1fr 1fr', gap:'0.6rem', alignItems:'end' }}>
                 <div>
-                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Width (px)</label>
+                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Chiều rộng (px)</label>
                   <input type="number" min="1"
                     value={Math.round(imgDims.w * (avatarState.scaleX || 1))}
                     onChange={e => {
@@ -261,7 +273,7 @@ function UserEditor() {
                   {lockRatio ? <Lock size={16} /> : <Unlock size={16} />}
                 </button>
                 <div>
-                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Height (px)</label>
+                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Chiều cao (px)</label>
                   <input type="number" min="1"
                     value={Math.round(imgDims.h * (avatarState.scaleY || 1))}
                     onChange={e => {
@@ -271,7 +283,7 @@ function UserEditor() {
                     }} style={{ width:'100%' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Rotation (°)</label>
+                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Xoay (°)</label>
                   <input type="number"
                     value={Math.round(avatarState.rotation || 0)}
                     onChange={e => setAvatarState(p => ({ ...p, rotation: parseFloat(e.target.value) || 0 }))}
@@ -280,18 +292,18 @@ function UserEditor() {
               </div>
             </div>
           )}
-          <p style={{ marginTop:'1.5rem', color:'var(--text-muted)', fontSize:'0.9rem' }}>Drag, pinch or use controls to adjust your image.</p>
+          <p style={{ marginTop:'1.5rem', color:'var(--text-muted)', fontSize:'0.9rem' }}>Kéo, chụm hoặc sử dụng các nút điều khiển để điều chỉnh hình ảnh của bạn.</p>
         </div>
 
         <div className="card">
-          <h3 style={{ marginBottom:'1.5rem' }}>Editor Controls</h3>
+          <h3 style={{ marginBottom:'1.5rem' }}>Bảng điều khiển</h3>
           <div style={{ marginBottom:'2rem' }}>
-            <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Your Image</label>
-            <FileUploadZone label={avatarImage ? 'Change Image' : 'Drop Image Here'} onFilesSelected={handleAvatarUpload} />
+            <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Hình ảnh của bạn</label>
+            <FileUploadZone label={avatarImage ? 'Đổi ảnh' : 'Tải ảnh lên'} onFilesSelected={handleAvatarUpload} />
           </div>
           {editableTexts.length > 0 && (
             <div style={{ marginBottom:'2rem' }}>
-              <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Custom Info</label>
+              <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Tùy chỉnh thông số</label>
               {editableTexts.map(t => (
                 <div key={t.id} style={{ marginBottom:'1rem' }}>
                   <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:'0.25rem' }}>{t.label || 'Input'}</p>
@@ -304,7 +316,7 @@ function UserEditor() {
           )}
           {/* Local save status */}
           <div style={{ padding:'0.75rem 1rem', background:'rgba(99,102,241,0.08)', borderRadius:'0.5rem', border:'1px solid rgba(99,102,241,0.15)', fontSize:'0.8rem', color:'var(--text-muted)' }}>
-            💾 Auto-saving locally as you edit
+            💾 Tự động lưu khi bạn chỉnh sửa
             {effectiveProjectId && <span style={{ display:'block', marginTop:'0.25rem', color:'var(--accent)' }}>✓ Project #{effectiveProjectId}</span>}
           </div>
         </div>
