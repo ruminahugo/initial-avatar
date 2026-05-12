@@ -171,7 +171,10 @@ function UserEditor() {
 
       // Only redirect on first-ever creation
       //if (!effectiveProjectId && !isAutosave) navigate(`/project/${savedId}`, { replace: true });
-      if (!isAutosave) alert('Đã lưu thành công vào server!');
+      if (!isAutosave) {
+        if (res.data.recreated) alert('Project đã bị xóa bởi admin. Đã tạo lại project mới thành công!');
+        else alert('Project đã lưu vào server!');
+      }
     } catch (err) { if (!isAutosave) alert('Error saving project'); }
     finally { setSaving(false); }
   };
@@ -202,7 +205,7 @@ function UserEditor() {
     finally { setExporting(false); }
   };
 
-  if (loading || !template) return <div className="loading-screen">Đang tải...</div>;
+  if (loading || !template) return <div className="loading-screen">Loading Editor...</div>;
 
   const config        = typeof template.config === 'string' ? JSON.parse(template.config) : (template.config || {});
   const editableTexts = (config.layers || []).filter(l => l.type === 'text' && l.isEditable);
@@ -211,17 +214,17 @@ function UserEditor() {
     <div className="container fade-in" style={{ paddingBottom: '5rem' }}>
       <header className="header">
         <button className="btn-outline" onClick={() => navigate('/')} style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-          <ArrowLeft size={18} /> Quay lại
+          <ArrowLeft size={18} /> Back
         </button>
         <h2>{template.name}</h2>
-        <div style={{ display:'flex', gap:'1rem' }}>
+        <div style={{ display:'flex', gap:'1rem', marginTop: window.innerWidth <= 768 ? '8px' : '0' }}>
           <button className="btn-outline" onClick={() => handleSave()} disabled={saving}>
             <Save size={18} style={{ marginRight:'0.5rem' }} />
-            {saving ? 'Đang lưu...' : (effectiveProjectId ? 'Cập nhật' : 'Lưu')}
+            {saving ? 'Saving...' : (effectiveProjectId ? 'Update' : 'Save')}
           </button>
           <button className="btn-primary" onClick={handleExport} disabled={exporting}>
             <Download size={18} style={{ marginRight:'0.5rem' }} />
-            {exporting ? 'Đang xuất ảnh...' : 'Xuất ảnh HD'}
+            {exporting ? 'Exporting...' : 'Export HD'}
           </button>
         </div>
       </header>
@@ -233,7 +236,7 @@ function UserEditor() {
         </div>
       )}
 
-      <div style={{ display: window.innerWidth > 768 ?'grid' : 'block', gridTemplateColumns:'1fr 320px', gap:'2rem' }}>
+      <div style={{ display: window.innerWidth <= 768 ? 'block' : 'grid', gridTemplateColumns:'1fr 320px', gap:'2rem' }}>
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
           <CanvasEditor
             template={template}
@@ -250,7 +253,7 @@ function UserEditor() {
           {avatarImage && imgDims.w > 0 && (
             <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:'1rem', padding:'1rem 1.25rem', marginTop:'1rem', width:'100%' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.75rem' }}>
-                <span style={{ fontSize:'0.85rem', fontWeight:700, color:'var(--text-muted)' }}>Thuộc tính ảnh</span>
+                <span style={{ fontSize:'0.85rem', fontWeight:700, color:'var(--text-muted)' }}>Image Properties</span>
                 <button className="btn-outline" style={{ padding:'0.3rem 0.8rem', fontSize:'0.8rem', display:'flex', alignItems:'center', gap:'0.4rem' }}
                   onClick={() => { const d = avatarState._default; if (d) setAvatarState(p => ({ ...p, ...d })); }}>
                   <RotateCcw size={14} /> Reset
@@ -258,7 +261,7 @@ function UserEditor() {
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr auto 1fr 1fr', gap:'0.6rem', alignItems:'end' }}>
                 <div>
-                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Chiều rộng (px)</label>
+                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Width (px)</label>
                   <input type="number" min="1"
                     value={Math.round(imgDims.w * (avatarState.scaleX || 1))}
                     onChange={e => {
@@ -273,7 +276,7 @@ function UserEditor() {
                   {lockRatio ? <Lock size={16} /> : <Unlock size={16} />}
                 </button>
                 <div>
-                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Chiều cao (px)</label>
+                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Height (px)</label>
                   <input type="number" min="1"
                     value={Math.round(imgDims.h * (avatarState.scaleY || 1))}
                     onChange={e => {
@@ -283,7 +286,7 @@ function UserEditor() {
                     }} style={{ width:'100%' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Xoay (°)</label>
+                  <label style={{ fontSize:'0.75rem', color:'var(--text-muted)', display:'block', marginBottom:'0.3rem' }}>Rotation (°)</label>
                   <input type="number"
                     value={Math.round(avatarState.rotation || 0)}
                     onChange={e => setAvatarState(p => ({ ...p, rotation: parseFloat(e.target.value) || 0 }))}
@@ -292,18 +295,18 @@ function UserEditor() {
               </div>
             </div>
           )}
-          <p style={{ marginTop:'1.5rem', color:'var(--text-muted)', fontSize:'0.9rem' }}>Kéo, chụm hoặc sử dụng các nút điều khiển để điều chỉnh hình ảnh của bạn.</p>
+          <p style={{ marginTop:'1.5rem', color:'var(--text-muted)', fontSize:'0.9rem' }}>Drag, pinch or use controls to adjust your image.</p>
         </div>
 
         <div className="card">
-          <h3 style={{ marginBottom:'1.5rem' }}>Bảng điều khiển</h3>
+          <h3 style={{ marginBottom:'1.5rem' }}>Editor Controls</h3>
           <div style={{ marginBottom:'2rem' }}>
-            <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Hình ảnh của bạn</label>
-            <FileUploadZone label={avatarImage ? 'Đổi ảnh' : 'Tải ảnh lên'} onFilesSelected={handleAvatarUpload} />
+            <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Your Image</label>
+            <FileUploadZone label={avatarImage ? 'Change Image' : 'Drop Image Here'} onFilesSelected={handleAvatarUpload} />
           </div>
           {editableTexts.length > 0 && (
             <div style={{ marginBottom:'2rem' }}>
-              <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Tùy chỉnh thông số</label>
+              <label style={{ display:'block', marginBottom:'0.5rem', fontWeight:'600' }}>Custom Info</label>
               {editableTexts.map(t => (
                 <div key={t.id} style={{ marginBottom:'1rem' }}>
                   <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:'0.25rem' }}>{t.label || 'Input'}</p>
@@ -316,7 +319,7 @@ function UserEditor() {
           )}
           {/* Local save status */}
           <div style={{ padding:'0.75rem 1rem', background:'rgba(99,102,241,0.08)', borderRadius:'0.5rem', border:'1px solid rgba(99,102,241,0.15)', fontSize:'0.8rem', color:'var(--text-muted)' }}>
-            💾 Tự động lưu khi bạn chỉnh sửa
+            💾 Auto-saving locally as you edit
             {effectiveProjectId && <span style={{ display:'block', marginTop:'0.25rem', color:'var(--accent)' }}>✓ Project #{effectiveProjectId}</span>}
           </div>
         </div>

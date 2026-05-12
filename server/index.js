@@ -272,7 +272,22 @@ app.post('/api/projects',
       if (thumbRel) p.push(thumbRel);
       if (hdRel) p.push(hdRel);
       p.push(id);
-      db.run(sql, p, err => err ? res.status(500).json({ error: err.message }) : res.json({ id }));
+      db.run(sql, p, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) {
+          // Project was deleted by admin — recreate it so user doesn't lose work
+          db.run(
+            'INSERT INTO projects (template_id, avatar_path, state, thumbnail_path, export_path, last_saved_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [template_id, av, state, thumbRel, hdRel, now],
+            function(err2) {
+              if (err2) return res.status(500).json({ error: err2.message });
+              res.json({ id: this.lastID, recreated: true });
+            }
+          );
+        } else {
+          res.json({ id });
+        }
+      });
     } else {
       db.run(
         'INSERT INTO projects (template_id, avatar_path, state, thumbnail_path, export_path, last_saved_at) VALUES (?, ?, ?, ?, ?, ?)',

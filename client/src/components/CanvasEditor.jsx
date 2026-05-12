@@ -192,7 +192,7 @@ function CanvasEditor({ template, avatarImage, avatarState, onStateChange, stage
             style={{ background: '#0a0a0a', display: 'block' }}
             ref={stageRef}
             onMouseDown={handleStageDown}
-            onTouchEnd={e => { if (e.target === e.target.getStage()) setAvatarSelected(false); }}
+            onTap={e => { if (e.target === e.target.getStage()) setAvatarSelected(false); }}
           >
             {/* ── Layer 1: clipped content ── */}
             <Layer clipFunc={makeClipFunc}>
@@ -260,7 +260,7 @@ function CanvasEditor({ template, avatarImage, avatarState, onStateChange, stage
                   borderStroke="#6366f1"
                   anchorStroke="#6366f1"
                   anchorFill="#fff"
-                  anchorSize={22}
+                  anchorSize={32}
                   anchorCornerRadius={4}
                   borderDash={[4, 2]}
                 />
